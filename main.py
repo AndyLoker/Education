@@ -1,75 +1,70 @@
+# main.py
+import threading
+import RPi.GPIO as GPIO
 import time
-import queue
-import numpy as np
-import sounddevice as sd
-from pynput import keyboard
-import traceback
+import openai
 
-from recording import callback, process_with_whisper
+# Our existing modules
+import recording
 from threads_handler import process_user_input
 
-# Global variables
-q = queue.Queue()
-recording_stream = None
-samplerate = 44100  # or 16000 if you want to reduce bandwidth
+BUTTON_PIN = 17  # BCM pin where the button is connected
 
-def on_press(key):
-    global recording_stream
-    if key == keyboard.Key.space and recording_stream is None:
-        print('Space pressed, starting recording.')
-        q.queue.clear()
-        recording_stream = sd.InputStream(
-            callback=lambda indata, frames, time_, status: callback(indata, q),
-            samplerate=samplerate,
-            channels=1
-        )
-        try:
-            recording_stream.start()
-        except Exception as e:
-            print("An error occurred while starting the recording:")
-            traceback.print_exc()
-            recording_stream = None
+running = True   # Global flag to let the button thread run
 
-def on_release(key):
-    global recording_stream
-    if key == keyboard.Key.space and recording_stream is not None:
-        print('Space released, stopping recording.')
-        try:
-            recording_stream.stop()
-            recording_stream.close()
-            recording_stream = None
+def init_gpio():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-            frames = []
-            while not q.empty():
-                frames.append(q.get())
-
-            if frames:
-                audio_data = np.concatenate(frames, axis=0)
-                print('Transcribing audio with Whisper...')
-                user_input = process_with_whisper(audio_data, samplerate)
-                if user_input:
-                    print('Transcribed text:', user_input)
-                    process_user_input(user_input)
-                else:
-                    print('No text transcribed.')
-            else:
-                print('No audio data recorded.')
-        except Exception as e:
-            print("Error during recording or processing:")
-            traceback.print_exc()
-            recording_stream = None
+def button_thread():
+    """
+    This thread waits for the button to be pressed. When pressed, record audio
+    until released, then transcribe and process the input.
+    """
+    while running:
+        # Poll if button is pressed
+        if GPIO.input(BUTTON_PIN) == GPIO.LOW:
+            # Record voice until user releases button
+            audio_data = recording.record_audio_while_button_held(BUTTON_PIN)
+            user_input = recording.process_with_whisper(audio_data)
+            if user_input:
+                print(f"\n[VOICE INPUT] {user_input}")
+                process_user_input(user_input)
+        # Sleep a bit so we don't hammer the CPU
+        time.sleep(0.1)
 
 def main():
+    global running
+    init_gpio()
+
+    # Start the button thread
+    t = threading.Thread(target=button_thread, daemon=True)
+    t.start()
+
+    print("System ready! Press the button for voice input, or type a request below.")
+    print("Type 'quit' to end the program.")
+
     try:
-        with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-            listener.join()
-    except Exception as e:
-        print("An error occurred in the main loop:")
-        traceback.print_exc()
+        while True:
+            typed = input("Type request: ").strip()
+            if typed.lower() == "quit":
+                running = False
+                break
+            elif typed:
+                # Send typed input to the AI
+                process_user_input(typed)
+            else:
+                # If user just pressed Enter without typing,
+                # do nothing (or you could do something else).
+                pass
+
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt, exiting...")
+
     finally:
-        if recording_stream is not None:
-            recording_stream.stop()
-            recording_stream.close()
+        running = False
+        GPIO.cleanup()
+        print("Goodbye.")
 
 if __name__ == "__main__":
     main()
