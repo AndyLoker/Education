@@ -1,48 +1,73 @@
-# main.py
-import threading
-import RPi.GPIO as GPIO
+import lgpio
 import time
-import openai
+import threading
 
-# Our existing modules
+import openai
 import recording
 from threads_handler import process_user_input
 
-BUTTON_PIN = 17  # BCM pin where the button is connected
+BUTTON_PIN = 17   # BCM pin number
+running = True    # global flag to stop the threads gracefully
 
-running = True   # Global flag to let the button thread run
-
-def init_gpio():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-def button_thread():
+def init_lgpio():
     """
-    This thread waits for the button to be pressed. When pressed, record audio
-    until released, then transcribe and process the input.
+    Opens /dev/gpiochip0 and configures BUTTON_PIN as input with internal pull-up.
+    Returns a handle to the gpiochip.
     """
+    h = lgpio.gpiochip_open(0)  # open the default chip (gpiochip0)
+    # Set direction
+    lgpio.gpio_set_direction(h, BUTTON_PIN, lgpio.LG_INPUT)
+    # Enable pull-up
+    lgpio.gpio_set_pull_up_down(h, BUTTON_PIN, lgpio.LG_BB_UP)
+    return h
+
+def button_thread(gpio_handle):
+    """
+    Monitors BUTTON_PIN. When pressed (reads 0), start recording.
+    When released (reads 1), stop and transcribe.
+    """
+    global running
+    is_recording = False
+    stream = None
+    audio_queue = None
+
     while running:
-        # Poll if button is pressed
-        if GPIO.input(BUTTON_PIN) == GPIO.LOW:
-            # Record voice until user releases button
-            audio_data = recording.record_audio_while_button_held(BUTTON_PIN)
+        val = lgpio.gpio_read(gpio_handle, BUTTON_PIN)
+
+        if val == 0 and not is_recording:
+            # Button just pressed => start recording
+            print("Button pressed. Starting recording...")
+            stream, audio_queue = recording.start_recording()
+            is_recording = True
+
+        elif val == 1 and is_recording:
+            # Button just released => stop recording
+            print("Button released. Stopping recording...")
+            audio_data = recording.stop_recording(stream, audio_queue)
+            is_recording = False
+            stream = None
+            audio_queue = None
+
+            # Transcribe with Whisper
             user_input = recording.process_with_whisper(audio_data)
             if user_input:
-                print(f"\n[VOICE INPUT] {user_input}")
+                print(f"[VOICE INPUT] {user_input}")
+                # Send to AI
                 process_user_input(user_input)
-        # Sleep a bit so we don't hammer the CPU
-        time.sleep(0.1)
+
+        time.sleep(0.05)  # short debounce/poll interval
 
 def main():
     global running
-    init_gpio()
+    # Initialize the gpio handle
+    gpio_handle = init_lgpio()
 
     # Start the button thread
-    t = threading.Thread(target=button_thread, daemon=True)
+    t = threading.Thread(target=button_thread, args=(gpio_handle,), daemon=True)
     t.start()
 
-    print("System ready! Press the button for voice input, or type a request below.")
-    print("Type 'quit' to end the program.")
+    print("System ready! Press and hold the button for voice input.")
+    print("Type a request for the AI below. Type 'quit' to exit.")
 
     try:
         while True:
@@ -51,19 +76,15 @@ def main():
                 running = False
                 break
             elif typed:
-                # Send typed input to the AI
                 process_user_input(typed)
             else:
-                # If user just pressed Enter without typing,
-                # do nothing (or you could do something else).
                 pass
-
+            time.sleep(0.1)
     except KeyboardInterrupt:
-        print("\nKeyboardInterrupt, exiting...")
-
+        print("KeyboardInterrupt, exiting.")
     finally:
         running = False
-        GPIO.cleanup()
+        lgpio.gpiochip_close(gpio_handle)
         print("Goodbye.")
 
 if __name__ == "__main__":

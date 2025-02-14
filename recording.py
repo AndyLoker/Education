@@ -1,4 +1,3 @@
-# recording.py
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
@@ -6,8 +5,6 @@ import queue
 import io
 import requests
 import traceback
-import RPi.GPIO as GPIO
-import time
 import openai
 
 def callback(indata, frames, time_, status, audio_queue):
@@ -16,38 +13,31 @@ def callback(indata, frames, time_, status, audio_queue):
     """
     audio_queue.put(indata.copy())
 
-def record_audio_while_button_held(button_pin=17, samplerate=44100):
+def start_recording(samplerate=44100):
     """
-    Records audio while the given GPIO pin is LOW (button pressed),
-    and stops once the button is released.
-    Returns a NumPy array of the recorded audio data, or None if no audio was captured.
+    Starts a sounddevice InputStream and returns (stream, audio_queue).
+    The caller decides when to stop recording.
     """
-
-    # Clear any leftover data
     audio_queue = queue.Queue()
 
     def audio_callback(indata, frames, time_, status):
         callback(indata, frames, time_, status, audio_queue)
 
-    # Start recording
     stream = sd.InputStream(
         samplerate=samplerate,
         channels=1,
         callback=audio_callback
     )
     stream.start()
-    print("Recording... (press and hold the button)")
+    return stream, audio_queue
 
-    # Wait until button goes HIGH again
-    while GPIO.input(button_pin) == GPIO.LOW:
-        time.sleep(0.01)
-
-    # Stop and close stream
+def stop_recording(stream, audio_queue):
+    """
+    Stops the given stream and returns a NumPy array of recorded audio.
+    """
     stream.stop()
     stream.close()
-    print("Recording stopped.")
 
-    # Gather frames from the queue
     frames = []
     while not audio_queue.empty():
         frames.append(audio_queue.get())
@@ -77,7 +67,7 @@ def process_with_whisper(audio_data, samplerate=44100):
         }
         data = {
             "model": "whisper-1",
-            "language": "en"  # Explicitly specify English
+            "language": "en"
         }
         
         response = requests.post(url, headers=headers, files=files, data=data)
@@ -85,7 +75,6 @@ def process_with_whisper(audio_data, samplerate=44100):
 
         transcript = response.json()
         return transcript['text']
-
     except Exception as e:
         print("An error occurred during transcription:")
         traceback.print_exc()
