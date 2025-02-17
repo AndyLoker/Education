@@ -1,10 +1,10 @@
 import re
-import pico_interface
+import interface
 
-# Map each tag to a numeric ID the Pico understands
-# (for example, 10 => 'Gin', 11 => 'Whiskey', etc.)
-TAG_TO_PICO_ID = {
-    "@10": 10,   # or maybe 1, if you prefer smaller IDs
+# Map each tag to a numeric ID the Arduino understands
+# For example, "@10" => 10, etc. Adjust these as needed.
+TAG_TO_INGREDIENT_ID = {
+    "@10": 10,
     "@11": 11,
     "@12": 12,
     "@13": 13,
@@ -13,39 +13,41 @@ TAG_TO_PICO_ID = {
     "@16": 16,
     "@17": 17,
     "@18": 18,
-    "@19": 19,
+    "@19": 19
 }
 
 def process_tags(answer):
     """
-    Finds tags in 'answer' (e.g. "@10" repeated 2 times means 2 units of that ingredient),
-    prints them, and then sends instructions to the Pico over UART.
+    Finds ingredient tags in 'answer' (e.g. "@10" repeated 2 times means 2 units),
+    prints them, and sends them to the Arduino over serial.
     """
-    # We'll collect the total number of each tag
+    # We'll collect total counts for each tag
     tag_counts = {}
 
-    for tag, pico_id in TAG_TO_PICO_ID.items():
+    for tag, ing_id in TAG_TO_INGREDIENT_ID.items():
         count = answer.count(tag)
         if count > 0:
             tag_counts[tag] = count
 
     if not tag_counts:
-        return  # No recognized tags
+        return  # No recognized tags, do nothing
 
-    # Print them in the console
+    # Print them to the console for debug
     for tag, count in tag_counts.items():
-        # Example: @10 => "Gin x 2"
         print(f"{tag} x {count}")
 
-    # If we want to actually send to the Pico:
+    # Now send to Arduino
     try:
-        pico_interface.open_serial()  # open UART
-        # Build a dict { pico_id: count } that we pass to send_multiple_ingredients()
+        interface.open_serial()  # open the serial port (defaults to /dev/ttyACM0, 115200)
+        # Build a dict {ing_id: count}, pass it to the new 'interface'
         ingredients_dict = {}
-        for tag, count in tag_counts.items():
-            pico_id = TAG_TO_PICO_ID[tag]
-            ingredients_dict[pico_id] = count
+        for tag, cnt in tag_counts.items():
+            ing_id = TAG_TO_INGREDIENT_ID[tag]
+            ingredients_dict[ing_id] = cnt
 
-        pico_interface.send_multiple_ingredients(ingredients_dict)
+        # Send them all
+        interface.send_multiple_ingredients(ingredients_dict)
+
     finally:
-        pico_interface.close_serial()
+        # Always close the serial port
+        interface.close_serial()
