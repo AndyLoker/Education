@@ -1,5 +1,4 @@
 import time
-import tags
 
 # Try to import the serial module
 try:
@@ -48,9 +47,6 @@ print("q - Exit the program")
 
 
 # User interaction loop
-"""
-Can you modify this function so it only asks for commands if the ingredients_used is updated (when the user has requested a drink)
-"""
 try:
     while True:
 
