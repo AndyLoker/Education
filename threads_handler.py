@@ -5,7 +5,7 @@ from talker import talk
 from tags import process_tags
 
 # NEW: import your Arduino code
-import arduino_com
+import Arduino_com
 
 import APIkey
 openai.api_key = APIkey.OpenAI
