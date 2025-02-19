@@ -87,10 +87,10 @@ def start_dispensing(ser, pump_number, grams):
 
 def monitor_dispensing(ser):
     """
-    Monitors dispensing in real-time, checking for weight changes and completion.
-    Example serial messages from Arduino might include:
-      "⚖️ Current Weight: <number> g"
-      "✅ DISPENSE_COMPLETE"
+    Monitors dispensing in real-time, checking for:
+      - weight changes (to detect pump errors),
+      - weight limit (200g),
+      - and completion (DISPENSE_COMPLETE).
     """
     start_time = time.time()
     last_weight = None
@@ -105,7 +105,12 @@ def monitor_dispensing(ser):
                     weight_value = int(response.split(":")[1].strip().split(" ")[0])
                     print(f"⚖️ Current weight: {weight_value} g")
 
-                    # Check whether weight has changed (error detection)
+                    # 1) Check for weight limit
+                    if weight_value > 200:
+                        print("🚨 Error: Weight limit exceeded (200g)!")
+                        return
+
+                    # 2) Check whether weight has changed (error detection)
                     if last_weight is not None and abs(weight_value - last_weight) < 2:
                         # If weight hasn't changed for >= 2 seconds, consider an error
                         if time.time() - start_time >= 2:
