@@ -1,13 +1,33 @@
+# arduino_com.py
+
 import serial
 import time
 
 # ===== Serial Port Configuration =====
-SERIAL_PORT = "/dev/ttyACM0"
+SERIAL_PORT = "/dev/ttyACM0"   # Adjust if your Arduino enumerates differently
 BAUD_RATE = 9600
+
+# One "unit" is 50 grams
+GRAMS_PER_UNIT = 50
+
+# Map each ingredient name to a pump number
+INGREDIENT_TO_PUMP = {
+    "Gin": 1,
+    "Whiskey": 2,
+    "Rum": 3,
+    "Tequila": 4,
+    "Vodka": 5,
+    "Tonic Water": 6,
+    "Club Soda": 7,
+    "Ginger Beer": 8,
+    "Cola": 9,
+    "Lemon Juice": 10
+}
 
 def initialize_serial():
     """
     Initializes the serial connection with Arduino.
+    Returns the serial object or None if it fails.
     """
     try:
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
@@ -33,7 +53,7 @@ def send_command(ser, command):
 
 def read_response(ser):
     """
-    Reads responses from the Arduino and handles any alarms.
+    Reads responses from the Arduino and handles any alarms or completion messages.
     """
     responses = []
     while ser.in_waiting > 0:
@@ -43,7 +63,7 @@ def read_response(ser):
             responses.append(response)
 
             if "⚠️ ERROR" in response:
-                print("🚨 ALARM! Type 'r' to reset or 'c' to continue dispensing.")
+                print("🚨 ALARM! Check hardware or code on Arduino.")
             elif "✅ DISPENSE_COMPLETE" in response:
                 print("✅ Dispensing completed.")
 
@@ -68,6 +88,9 @@ def start_dispensing(ser, pump_number, grams):
 def monitor_dispensing(ser):
     """
     Monitors dispensing in real-time, checking for weight changes and completion.
+    Example serial messages from Arduino might include:
+      "⚖️ Current Weight: <number> g"
+      "✅ DISPENSE_COMPLETE"
     """
     start_time = time.time()
     last_weight = None
@@ -82,9 +105,9 @@ def monitor_dispensing(ser):
                     weight_value = int(response.split(":")[1].strip().split(" ")[0])
                     print(f"⚖️ Current weight: {weight_value} g")
 
-                    # Check whether the weight has changed (error detection)
+                    # Check whether weight has changed (error detection)
                     if last_weight is not None and abs(weight_value - last_weight) < 2:
-                        # If weight hasn't changed in 2 seconds, assume an error
+                        # If weight hasn't changed for >= 2 seconds, consider an error
                         if time.time() - start_time >= 2:
                             print("🚨 Error: No weight change! Check fluid level or pump.")
                             return
@@ -101,107 +124,40 @@ def monitor_dispensing(ser):
                 print("✅ Dispensing process finished.")
                 return
 
-def reset_alarm(ser):
-    """
-    Resets an alarm state on Arduino.
-    """
-    print("🔄 Resetting alarm...")
-    send_command(ser, "r")
-
-def continue_dispensing(ser):
-    """
-    Continues dispensing after an alarm.
-    """
-    print("▶️ Continuing dispensing...")
-    send_command(ser, "c")
-
-def start_weight_display(ser):
-    """
-    Starts continuous weight display from Arduino.
-    """
-    print("⚖️ Starting weight display...")
-    send_command(ser, "cal")
-
-def stop_weight_display(ser):
-    """
-    Stops continuous weight display.
-    """
-    print("⏹️ Stopping weight display...")
-    send_command(ser, "f")
-
 def fill_drink_from_tags(ser, tags_dict):
     """
-    Takes a dictionary of { 'IngredientName': amount_in_grams, ... }
-    and dispenses each ingredient in sequence.
-
-    Example:
-        tags_dict = { 'Gin': 20, 'Vodka': 25 }
-    You will need a mapping from ingredient name -> pump number in this function.
+    Takes a dictionary of { 'IngredientName': number_of_units, ... }
+    and dispenses each ingredient in sequence, where each unit = 50 grams.
+    
+    Example usage:
+        tags_dict = { 'Gin': 2, 'Vodka': 1 }
+        This means 2 units of Gin -> 2*50=100g, 1 unit of Vodka -> 50g.
     """
-
-    # For example, define which pump each ingredient uses:
-    ingredient_to_pump = {
-        "Gin": 1,
-        "Whiskey": 2,
-        "Rum": 3,
-        "Tequila": 4,
-        "Vodka": 5,
-        "Tonic Water": 6,
-        "Club Soda": 7,
-        "Ginger Beer": 8,
-        "Cola": 9,
-        "Lemon Juice": 10
-    }
-
-    # Go through each ingredient
-    for ingredient, grams in tags_dict.items():
-        # Find the correct pump number
-        pump_number = ingredient_to_pump.get(ingredient, None)
+    for ingredient, units in tags_dict.items():
+        pump_number = INGREDIENT_TO_PUMP.get(ingredient)
         if pump_number is None:
             print(f"⚠️ No pump assigned for {ingredient}, skipping.")
             continue
 
-        print(f"Filling {grams} g of {ingredient} via pump {pump_number}...")
-        start_dispensing(ser, pump_number, grams)
+        grams_to_dispense = units * GRAMS_PER_UNIT
+        print(f"Filling {grams_to_dispense} g of {ingredient} (units: {units}) via pump {pump_number}...")
+        start_dispensing(ser, pump_number, grams_to_dispense)
 
 def main():
     """
-    Main control loop. 
-    You can type commands or try out the fill_drink_from_tags() function.
+    Example usage: Initialize serial, dispense a sample drink, then close.
     """
     ser = initialize_serial()
     if not ser:
         return
 
-    while True:
-        command = input("Enter a command (nwX=start, r=reset, c=continue, cal=weight, f=stop, q=quit, tags=demo): ").strip()
+    # Example: If AI said "Gin: 2, Vodka: 1"
+    sample_tags = {
+        "Gin": 2,
+        "Vodka": 1
+    }
 
-        if command.lower() == "q":
-            print("🔌 Closing connection...")
-            break
-        elif command.lower() == "r":
-            reset_alarm(ser)
-        elif command.lower() == "c":
-            continue_dispensing(ser)
-        elif command.lower() == "cal":
-            start_weight_display(ser)
-        elif command.lower() == "f":
-            stop_weight_display(ser)
-        elif "w" in command:
-            # For example, "1w50" means pump #1, 50 grams
-            try:
-                pump_number, weight = command.split("w")
-                start_dispensing(ser, pump_number, int(weight))
-            except ValueError:
-                print("⚠️ Invalid format! Use <pump_number>w<grams>")
-        elif command.lower() == "tags":
-            # DEMO: Suppose we have some tags dict from the AI
-            sample_tags = {
-                "Gin": 15,
-                "Vodka": 20
-            }
-            print("Demo: filling drink from sample tags:")
-            fill_drink_from_tags(ser, sample_tags)
+    fill_drink_from_tags(ser, sample_tags)
 
     ser.close()
     print("🔌 Connection closed.")

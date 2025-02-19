@@ -4,6 +4,9 @@ import openai
 from talker import talk
 from tags import process_tags
 
+# NEW: import your Arduino code
+import Arduino_com  
+
 import APIkey
 openai.api_key = APIkey.OpenAI
 assistant_id = APIkey.AssistantId
@@ -47,8 +50,16 @@ def process_user_input(user_input):
         print("TTS OUTPUT:", cleaned_answer)
         talk(cleaned_answer)
 
-        # Process tags (which may trigger motor commands on the Pico)
-        process_tags(answer)
+        # Process tags (which may trigger motor commands on the Arduino)
+        ingredients_dict = process_tags(answer) 
+        # If we found ingredients, dispense the drink
+        if ingredients_dict:
+            ser = Arduino_com.initialize_serial()
+            if ser:
+                Arduino_com.fill_drink_from_tags(ser, ingredients_dict)
+                ser.close()
+            else:
+                print("⚠️ Could not open Arduino serial connection.")
 
         # If the assistant says @goodbye, create a new thread
         if "@goodbye" in answer:
