@@ -5,7 +5,7 @@ from talker import talk
 from tags import process_tags
 
 # NEW: import your Arduino code
-import Arduino_com
+import arduino_com
 
 import APIkey
 openai.api_key = APIkey.OpenAI
@@ -54,9 +54,9 @@ def process_user_input(user_input):
         ingredients_dict = process_tags(answer) 
         # If we found ingredients, dispense the drink
         if ingredients_dict:
-            ser = Arduino_com.initialize_serial()
+            ser = arduino_com.initialize_serial()
             if ser:
-                Arduino_com.fill_drink_from_tags(ser, ingredients_dict)
+                arduino_com.fill_drink_from_tags(ser, ingredients_dict)
                 ser.close()
             else:
                 print("⚠️ Could not open Arduino serial connection.")
