@@ -111,9 +111,9 @@ def monitor_dispensing(ser):
                         return
 
                     # 2) Check whether weight has changed (error detection)
-                    if last_weight is not None and abs(weight_value - last_weight) < 2:
-                        # If weight hasn't changed for >= 2 seconds, consider an error
-                        if time.time() - start_time >= 2:
+                    if last_weight is not None and abs(weight_value - last_weight) < 1:
+                        # If weight hasn't changed for >= 4 seconds, consider an error
+                        if time.time() - start_time >= 4:
                             print("🚨 Error: No weight change! Check fluid level or pump.")
                             return
                     else:
