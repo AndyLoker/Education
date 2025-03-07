@@ -1,14 +1,12 @@
-# arduino_com.py
-
 import serial
 import time
 
-# ===== Serial Port Configuration =====
-SERIAL_PORT = "/dev/ttyACM0"   # Adjust if your Arduino enumerates differently
+SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 9600
+DEFAULT_TIMEOUT = 1
 
-# One "unit" is 50 grams
-GRAMS_PER_UNIT = 50
+# One "unit" = 25 grams
+GRAMS_PER_UNIT = 25
 
 # Map each ingredient name to a pump number
 INGREDIENT_TO_PUMP = {
@@ -24,148 +22,88 @@ INGREDIENT_TO_PUMP = {
     "Lemon Juice": 10
 }
 
-def initialize_serial():
+def open_serial():
     """
-    Initializes the serial connection with Arduino.
-    Returns the serial object or None if it fails.
+    Opens the serial port, returns a serial object or None on failure.
     """
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        time.sleep(2)  # Give Arduino time to reset
-        print("✅ Connected to Arduino successfully.")
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=DEFAULT_TIMEOUT)
+        time.sleep(2)  # let Arduino reset
+        print(f"✅ Connected to Arduino on {SERIAL_PORT} at {BAUD_RATE} baud.")
         return ser
-    except serial.SerialException as e:
-        print(f"❌ Connection error: {e}")
+    except Exception as e:
+        print("❌ Could not open serial port:", e)
         return None
 
-def send_command(ser, command):
-    """
-    Sends a command to the Arduino and reads the response.
-    """
+def close_serial(ser):
+    """Closes the serial connection."""
     if ser:
-        ser.write((command + "\n").encode())
-        print(f"📤 Sent: {command}")
-        time.sleep(0.5)
-        return read_response(ser)
-    else:
-        print("⚠️ No active connection.")
-        return None
+        ser.close()
+        print("🔌 Serial connection closed.")
 
-def read_response(ser):
+def send_command(cmd):
     """
-    Reads responses from the Arduino and handles any alarms or completion messages.
+    Opens serial, sends 'cmd', reads quick response, closes serial.
+    Used for short commands like 'r', 'c', '#clean2'.
     """
-    responses = []
-    while ser.in_waiting > 0:
-        response = ser.readline().decode().strip()
-        if response:
-            print(f"📥 Received: {response}")
-            responses.append(response)
-
-            if "⚠️ ERROR" in response:
-                print("🚨 ALARM! Check hardware or code on Arduino.")
-            elif "✅ DISPENSE_COMPLETE" in response:
-                print("✅ Dispensing completed.")
-
-    return responses
-
-def start_dispensing(ser, pump_number, grams):
-    """
-    Starts dispensing from the specified pump with the given weight (grams).
-    """
-    print("⚖️ Taring scale before dispensing...")
-    send_command(ser, "cal")  # Tare the scale before each dispense
-    time.sleep(2)
-
-    print("⚖️ Scale after taring: 0 g")
-
-    print(f"🚰 Starting dispense of {grams} g on pump {pump_number}...")
-    command = f"{pump_number}w{grams}"
-    send_command(ser, command)
-
-    monitor_dispensing(ser)
-
-def monitor_dispensing(ser):
-    """
-    Monitors dispensing in real-time, checking for:
-      - weight changes (to detect pump errors),
-      - weight limit (200g),
-      - and completion (DISPENSE_COMPLETE).
-    """
-    start_time = time.time()
-    last_weight = None
-
-    while True:
-        time.sleep(1)  # Check weight every 1 second
-        responses = read_response(ser)
-        for response in responses:
-            if "⚖️ Current Weight:" in response:
-                try:
-                    # Example format: "⚖️ Current Weight: 25 g"
-                    weight_value = int(response.split(":")[1].strip().split(" ")[0])
-                    print(f"⚖️ Current weight: {weight_value} g")
-
-                    # 1) Check for weight limit
-                    if weight_value > 200:
-                        print("🚨 Error: Weight limit exceeded (200g)!")
-                        return
-
-                    # 2) Check whether weight has changed (error detection)
-                    if last_weight is not None and abs(weight_value - last_weight) < 1:
-                        # If weight hasn't changed for >= 4 seconds, consider an error
-                        if time.time() - start_time >= 4:
-                            print("🚨 Error: No weight change! Check fluid level or pump.")
-                            return
-                    else:
-                        # Reset the timer if weight is changing
-                        start_time = time.time()
-
-                    last_weight = weight_value
-
-                except ValueError:
-                    print("⚠️ Weight read error – invalid format!")
-
-            if "✅ DISPENSE_COMPLETE" in response:
-                print("✅ Dispensing process finished.")
-                return
-
-def fill_drink_from_tags(ser, tags_dict):
-    """
-    Takes a dictionary of { 'IngredientName': number_of_units, ... }
-    and dispenses each ingredient in sequence, where each unit = 50 grams.
-    
-    Example usage:
-        tags_dict = { 'Gin': 2, 'Vodka': 1 }
-        This means 2 units of Gin -> 2*50=100g, 1 unit of Vodka -> 50g.
-    """
-    for ingredient, units in tags_dict.items():
-        pump_number = INGREDIENT_TO_PUMP.get(ingredient)
-        if pump_number is None:
-            print(f"⚠️ No pump assigned for {ingredient}, skipping.")
-            continue
-
-        grams_to_dispense = units * GRAMS_PER_UNIT
-        print(f"Filling {grams_to_dispense} g of {ingredient} (units: {units}) via pump {pump_number}...")
-        start_dispensing(ser, pump_number, grams_to_dispense)
-
-def main():
-    """
-    Example usage: Initialize serial, dispense a sample drink, then close.
-    """
-    ser = initialize_serial()
+    ser = open_serial()
     if not ser:
+        print("⚠️ No serial connection. Skipping command.")
+        return
+    try:
+        ser.write((cmd + "\n").encode('utf-8'))
+        print(f"📤 Sent: {cmd}")
+        time.sleep(0.5)
+        # read immediate response
+        while ser.in_waiting > 0:
+            line = ser.readline().decode('utf-8', errors='replace').strip()
+            if line:
+                print("Arduino:", line)
+    finally:
+        close_serial(ser)
+
+def send_clean(pump_number):
+    """Send cleaning command, e.g. '#clean2'."""
+    cmd = f"#clean{pump_number}"
+    send_command(cmd)
+
+def send_reset():
+    """Sends 'r' to reset an alarm."""
+    send_command("r")
+
+def send_resume():
+    """Sends 'c' to resume after alarm."""
+    send_command("c")
+
+def fill_drink_from_tags(tags_dict):
+    """
+    Takes a dict like {'Gin': 2, 'Vodka': 1} meaning 2 units of Gin, 1 of Vodka.
+    1 unit = 25 grams. So 'Gin': 2 => 50g on the pump mapped to Gin in INGREDIENT_TO_PUMP.
+    Then sends commands "pumpX w grams" in sequence.
+    """
+    ser = open_serial()
+    if not ser:
+        print("⚠️ Cannot dispense: no serial connection.")
         return
 
-    # Example: If AI said "Gin: 2, Vodka: 1"
-    sample_tags = {
-        "Gin": 2,
-        "Vodka": 1
-    }
+    try:
+        for ingredient, units in tags_dict.items():
+            pump_num = INGREDIENT_TO_PUMP.get(ingredient)
+            if pump_num is None:
+                print(f"⚠️ Unknown ingredient '{ingredient}'. Skipping.")
+                continue
 
-    fill_drink_from_tags(ser, sample_tags)
+            grams = units * GRAMS_PER_UNIT
+            command = f"{pump_num}w{grams}"
+            print(f"Dispensing {grams}g of {ingredient} (units={units}) -> {command}")
+            ser.write((command + "\n").encode('utf-8'))
+            time.sleep(0.5)
+            # Optionally read immediate response lines
+            while ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='replace').strip()
+                if line:
+                    print("Arduino:", line)
 
-    ser.close()
-    print("🔌 Connection closed.")
-
-if __name__ == "__main__":
-    main()
+        print("✅ All requested ingredients dispensed.")
+    finally:
+        close_serial(ser)
