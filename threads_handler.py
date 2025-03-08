@@ -4,7 +4,7 @@ import openai
 from talker import talk
 from tags import process_tags
 
-# NEW: import your Arduino code
+# Use the updated Arduino code
 import arduino_com
 
 import APIkey
@@ -52,14 +52,10 @@ def process_user_input(user_input):
 
         # Process tags (which may trigger motor commands on the Arduino)
         ingredients_dict = process_tags(answer) 
-        # If we found ingredients, dispense the drink
         if ingredients_dict:
-            ser = arduino_com.initialize_serial()
-            if ser:
-                arduino_com.fill_drink_from_tags(ser, ingredients_dict)
-                ser.close()
-            else:
-                print("⚠️ Could not open Arduino serial connection.")
+            # Now we simply call fill_drink_from_tags(...) 
+            # which internally opens/closes serial as needed
+            arduino_com.fill_drink_from_tags(ingredients_dict)
 
         # If the assistant says @goodbye, create a new thread
         if "@goodbye" in answer:
@@ -94,9 +90,7 @@ def remove_tags(text):
     """
     Removes known tags from the text so the spoken output is clean.
     """
-    # E.g., remove @10, @11, etc., plus @goodbye or any other special tags
     tags_to_remove = ["@10", "@11", "@12", "@13", "@14", "@15", "@16", "@17", "@18", "@19", "@goodbye"]
     for tag in tags_to_remove:
         text = text.replace(tag, "")
-    # You could also remove any bracketed info or other custom tags if needed
     return " ".join(text.split())
