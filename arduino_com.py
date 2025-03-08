@@ -77,9 +77,10 @@ def send_resume():
 
 def fill_drink_from_tags(tags_dict):
     """
-    Takes a dict like {'Gin': 2, 'Vodka': 1} meaning 2 units of Gin, 1 of Vodka.
-    1 unit = 25 grams. So 'Gin': 2 => 50g on the pump mapped to Gin in INGREDIENT_TO_PUMP.
-    Then sends commands "pumpX w grams" in sequence.
+    Takes a dictionary like {"Gin": 2, "Vodka": 1}, each unit = 25 grams.
+    Sends each pump command in sequence, waits for "DISPENSE_COMPLETE"
+    from Arduino, but if no lines come from Arduino for 10 seconds, 
+    logs an error and moves to the next ingredient.
     """
     ser = open_serial()
     if not ser:
@@ -96,14 +97,35 @@ def fill_drink_from_tags(tags_dict):
             grams = units * GRAMS_PER_UNIT
             command = f"{pump_num}w{grams}"
             print(f"Dispensing {grams}g of {ingredient} (units={units}) -> {command}")
-            ser.write((command + "\n").encode('utf-8'))
-            time.sleep(0.5)
-            # Optionally read immediate response lines
-            while ser.in_waiting > 0:
-                line = ser.readline().decode('utf-8', errors='replace').strip()
-                if line:
-                    print("Arduino:", line)
 
-        print("✅ All requested ingredients dispensed.")
+            ser.write((command + "\n").encode('utf-8'))
+            time.sleep(0.2)  # short delay so Arduino starts dispensing
+
+            dispensing_done = False
+            # We'll track the last time we got ANY line from Arduino
+            last_line_time = time.time()
+
+            while not dispensing_done:
+                line = ser.readline().decode('utf-8', errors='replace').strip()
+                
+                if line:  # We got a line from Arduino
+                    print("Arduino:", line)
+                    last_line_time = time.time()  # reset timer
+                    if "DISPENSE_COMPLETE" in line:
+                        dispensing_done = True
+                else:
+                    # No line received this iteration
+                    time.sleep(0.1)
+                    # Check if 10s have passed since last line
+                    if (time.time() - last_line_time) > 10:
+                        print("🚨 Error: No data from Arduino for 10s. Skipping this ingredient.")
+                        break  # exit the while loop, move on to next ingredient
+
+            if dispensing_done:
+                print(f"✅ Finished dispensing {ingredient}.\n")
+            else:
+                print(f"⚠️ Timed out waiting for {ingredient}. Moving on.\n")
+
+        print("✅ All requested ingredients processed.")
     finally:
         close_serial(ser)
