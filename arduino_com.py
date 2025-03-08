@@ -117,8 +117,8 @@ def fill_drink_from_tags(tags_dict):
                     # No line received this iteration
                     time.sleep(0.1)
                     # Check if 10s have passed since last line
-                    if (time.time() - last_line_time) > 10:
-                        print("🚨 Error: No data from Arduino for 10s. Skipping this ingredient.")
+                    if (time.time() - last_line_time) > 60:
+                        print("🚨 Error: No data from Arduino for 60s. Skipping this ingredient.")
                         break  # exit the while loop, move on to next ingredient
 
             if dispensing_done:
