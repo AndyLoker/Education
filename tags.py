@@ -1,14 +1,8 @@
 TAG_MAP = {
-    "@10": "Gin",
+    "@10": "Tequila",
     "@11": "Whiskey",
-    "@12": "Rum",
-    "@13": "Tequila",
-    "@14": "Vodka",
-    "@15": "Tonic Water",
-    "@16": "Club Soda",
-    "@17": "Ginger Beer",
-    "@18": "Cola",
-    "@19": "Lemon Juice"
+    "@12": "Lime Juice",
+    "@13": "Tonic Water"
 }
 
 def process_tags(answer):

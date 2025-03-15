@@ -10,16 +10,10 @@ GRAMS_PER_UNIT = 25
 
 # Map each ingredient name to a pump number
 INGREDIENT_TO_PUMP = {
-    "Gin": 1,
+    "Tequila": 1,
     "Whiskey": 2,
-    "Rum": 3,
-    "Tequila": 4,
-    "Vodka": 5,
-    "Tonic Water": 6,
-    "Club Soda": 7,
-    "Ginger Beer": 8,
-    "Cola": 9,
-    "Lemon Juice": 10
+    "Lime Juice": 3,
+    "Tonic Water": 4
 }
 
 def open_serial():
