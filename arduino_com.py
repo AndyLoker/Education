@@ -58,7 +58,7 @@ def send_command(cmd):
 
 def send_clean(pump_number):
     """Send cleaning command, e.g. '#clean2'."""
-    cmd = f"#clean{pump_number}"
+    cmd = f"#clean{pump_number}5"
     send_command(cmd)
 
 def send_reset():
