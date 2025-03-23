@@ -105,7 +105,7 @@ def fill_drink_from_tags(tags_dict):
                 if line:  # We got a line from Arduino
                     print("Arduino:", line)
                     last_line_time = time.time()  # reset timer
-                    if "DISPENSE COMPLETE" in line:
+                    if "DOSERING COMPLETE" in line:
                         dispensing_done = True
                 else:
                     # No line received this iteration
