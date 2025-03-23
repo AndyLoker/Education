@@ -2,7 +2,7 @@ import serial
 import time
 
 SERIAL_PORT = "/dev/ttyACM0"
-BAUD_RATE = 9600
+BAUD_RATE = 115200
 DEFAULT_TIMEOUT = 1
 
 # One "unit" = 25 grams
