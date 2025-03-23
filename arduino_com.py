@@ -62,12 +62,12 @@ def send_clean(pump_number):
     send_command(cmd)
 
 def send_reset():
-    """Sends 'r' to reset an alarm."""
-    send_command("r")
+    """Sends 'reset' to reset an alarm."""
+    send_command("reset")
 
 def send_resume():
-    """Sends 'c' to resume after alarm."""
-    send_command("c")
+    """Sends 'resume' to resume after alarm."""
+    send_command("resume")
 
 def fill_drink_from_tags(tags_dict):
     """
