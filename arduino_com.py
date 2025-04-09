@@ -99,7 +99,7 @@ def send_resume():
 def fill_drink_from_tags(tags_dict):
     """
     1) Activates ARM_START_OUT to signal the robot arm to grab glass & move to fill position.
-    2) Waits for ARM_READY_IN (from the robot) to be HIGH (1) or times out after 10s.
+    2) Waits for ARM_READY_IN (from the robot) to be HIGH (1) or times out after 60s.
     3) Sequentially sends pump commands to Arduino:
        - For each ingredient, wait for "DISPENSE_COMPLETE" or "EMERGENCY PRESSED"
        - If "EMERGENCY PRESSED", break out entirely.
@@ -113,10 +113,10 @@ def fill_drink_from_tags(tags_dict):
     lgpio.gpio_write(gpio_handle, ARM_START_OUT, 1)
     print("🤖 Signaling robot arm to grab glass & move to fill position...")
 
-    # Wait up to 10s for ARM_READY_IN = 1
+    # Wait up to 60s for ARM_READY_IN = 1
     arm_ready = False
     start_time = time.time()
-    while time.time() - start_time < 10:
+    while time.time() - start_time < 60:
         val = lgpio.gpio_read(gpio_handle, ARM_READY_IN)
         if val == 1:
             arm_ready = True
@@ -124,7 +124,7 @@ def fill_drink_from_tags(tags_dict):
         time.sleep(0.1)
 
     if not arm_ready:
-        print("⚠️ Robot arm did not signal ready within 10s. Aborting dispensing.")
+        print("⚠️ Robot arm did not signal ready within 60s. Aborting dispensing.")
         # Optionally set ARM_START_OUT low again if needed
         lgpio.gpio_write(gpio_handle, ARM_START_OUT, 0)
         close_arm_gpio(gpio_handle)
@@ -178,8 +178,8 @@ def fill_drink_from_tags(tags_dict):
                         break
                 else:
                     time.sleep(0.1)
-                    if time.time() - last_line_time > 10:
-                        print("⚠️ Timeout waiting for Arduino data (10s). Moving on.")
+                    if time.time() - last_line_time > 60:
+                        print("⚠️ Timeout waiting for Arduino data (60s). Moving on.")
                         break  # skip to the next ingredient
 
             if emergency_stop:
@@ -203,11 +203,11 @@ def fill_drink_from_tags(tags_dict):
     print("🤖 Signaling robot arm to deliver the drink & return home...")
     lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 1)
     # Optionally sleep or wait until arm finishes returning
-    # e.g. time.sleep(5)
+    time.sleep(5)
 
     # If you want to reset outputs to 0, do so now
-    # lgpio.gpio_write(gpio_handle, ARM_START_OUT, 0)
-    # lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 0)
+    lgpio.gpio_write(gpio_handle, ARM_START_OUT, 0)
+    lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 0)
 
     close_arm_gpio(gpio_handle)
     print("✅ Robot arm signals complete.")
