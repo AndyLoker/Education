@@ -110,8 +110,10 @@ def fill_drink_from_tags(tags_dict):
     # ---------- Step 1: Robot Arm "start" signal ----------
     gpio_handle = open_arm_gpio()
     # Set ARM_START_OUT = 1 (HIGH)
-    lgpio.gpio_write(gpio_handle, ARM_START_OUT, 1)
     print("🤖 Signaling robot arm to grab glass & move to fill position...")
+    lgpio.gpio_write(gpio_handle, ARM_START_OUT, 1)
+    time.sleep(2)  # 2-second pulse
+    lgpio.gpio_write(gpio_handle, ARM_START_OUT, 0)
 
     # Wait up to 60s for ARM_READY_IN = 1
     arm_ready = False
@@ -202,12 +204,10 @@ def fill_drink_from_tags(tags_dict):
     # ---------- Step 3: Signal the robot arm to deliver the drink ----------
     print("🤖 Signaling robot arm to deliver the drink & return home...")
     lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 1)
+    time.sleep(2)
+    lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 0)
     # Optionally sleep or wait until arm finishes returning
     time.sleep(5)
-
-    # If you want to reset outputs to 0, do so now
-    lgpio.gpio_write(gpio_handle, ARM_START_OUT, 0)
-    lgpio.gpio_write(gpio_handle, ARM_DELIVER_OUT, 0)
 
     close_arm_gpio(gpio_handle)
     print("✅ Robot arm signals complete.")
