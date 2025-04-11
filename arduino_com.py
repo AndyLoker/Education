@@ -171,7 +171,7 @@ def fill_drink_from_tags(tags_dict):
                     print("Arduino:", line)
                     last_line_time = time.time()
 
-                    if "DISPENSE_COMPLETE" in line:
+                    if "DOSERING COMPLETE" in line:
                         dispensing_done = True
 
                     if "EMERGENCY PRESSED" in line:
